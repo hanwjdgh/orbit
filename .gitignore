@@ -1,3 +1,5 @@
 outputs/
 work/travel-globe/dist/prototype/print-check.html
 work/storage-stress-results.json
+work/backup-test.json
+work/backup-invalid.json
