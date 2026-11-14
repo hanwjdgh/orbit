@@ -2,8 +2,9 @@ const $=s=>document.querySelector(s),KEY='orbit-interactive-prototype-v1';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let db={trips:[],active:null,three:false},trip=null,dayIndex=0,view='plan',query='',filter='전체',detailId=null,undoState=null,map=null,mapReady=false,mapCity=null;
 const pins=new Map();let pinSignature='',toastTimer;
-let storageRaw=null,storageLocked=false,saveFailed=false;
-function storageMessage(message){saveFailed=true;$('#storageNotice').hidden=false;$('#storageMessage').textContent=message;$('#saveStatus').textContent='저장되지 않음';$('#recoverStorage').hidden=storageRaw===null;}
+let storageRaw=null,storageLocked=false,saveFailed=false,rawSaved=false;
+const validId=id=>typeof id==='string'&&/^[A-Za-z0-9-]{1,100}$/.test(id);
+function storageMessage(message){saveFailed=true;$('#storageNotice').hidden=false;$('#storageMessage').textContent=message;$('#saveStatus').textContent='저장되지 않음';$('#recoverStorage').hidden=!storageLocked||storageRaw===null;$('#resetStorage').hidden=!(storageLocked&&rawSaved);}
 try{
   storageRaw=localStorage.getItem(KEY);
   if(storageRaw!==null){
@@ -11,11 +12,17 @@ try{
     if(!saved||!Array.isArray(saved.trips))throw Error('invalid');
     readBackup(JSON.stringify({format:'orbit-travel-backup',version:1,trips:saved.trips}),destinations,{local:true});
     const ids=new Set();
-    for(const t of saved.trips){if(typeof t.id!=='string'||!t.id||ids.has(t.id))throw Error('invalid');ids.add(t.id);const uids=new Set();for(const v of [...t.days.flatMap(d=>d.visits),...(t.unassigned||[])]){if(typeof v.uid!=='string'||!v.uid||uids.has(v.uid))throw Error('invalid');uids.add(v.uid);}}
+    for(const t of saved.trips){if(!validId(t.id)||ids.has(t.id))throw Error('invalid');ids.add(t.id);const uids=new Set();for(const v of [...t.days.flatMap(d=>d.visits),...(t.unassigned||[])]){if(!validId(v.uid)||uids.has(v.uid))throw Error('invalid');uids.add(v.uid);}}
     db=saved;db.three=saved.three===true;
   }
 }catch{storageLocked=true;storageMessage('저장 자료를 읽을 수 없어 덮어쓰기를 막았습니다. 원본 자료를 내려받아 보관해 주세요. 원본 복구 파일은 일반 여행 백업과 다릅니다.');}
-$('#recoverStorage').onclick=()=>{if(storageRaw===null)return;const url=URL.createObjectURL(new Blob([storageRaw],{type:'application/json;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='ORBIT-저장원본-복구용.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('#recoverStorage').onclick=()=>{if(storageRaw===null)return;const url=URL.createObjectURL(new Blob([storageRaw],{type:'application/json;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='ORBIT-저장원본-복구용.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);if(storageLocked){rawSaved=true;storageMessage('복구용 원본 파일을 내려받았어요. 파일이 보관된 것을 확인한 뒤 저장 자료를 비우고 새로 시작할 수 있어요. 일반 여행 백업 파일이 있다면 백업·복원으로 여행을 되살릴 수 있습니다.');}};
+$('#resetStorage').onclick=()=>{
+  if(!storageLocked||!rawSaved||!confirm('이 브라우저의 ORBIT 저장 자료를 모두 지우고 새로 시작합니다. 되돌릴 수 없습니다. 복구용 원본 파일을 보관했나요?'))return;
+  try{if(localStorage.getItem(KEY)!==storageRaw){storageMessage('그 사이 저장 자료가 바뀌어 지우지 않았어요. 새로고침해 주세요.');return;}localStorage.removeItem(KEY);}catch{storageMessage('저장 자료를 지우지 못했어요. 브라우저 설정에서 저장이 허용되는지 확인해 주세요.');return;}
+  location.reload();
+};
+window.addEventListener?.('storage',e=>{if(!storageLocked&&(e.key===KEY||e.key===null)&&e.newValue!==storageRaw)storageMessage('다른 탭에서 저장 내용이 바뀌었습니다. 이 탭의 변경은 저장되지 않으니 입력 중인 내용을 따로 보관한 뒤 새로고침해 주세요.');});
 const city=()=>destinations[trip?.city||'fukuoka'],catalog=()=>city().catalog,day=()=>trip.days[dayIndex],place=id=>indexedPlace(id),newDay=()=>({start:'09:00',mode:'transit',scenario:'normal',visits:[]});
 let placeCacheTrip=null,placeCacheList=null,placeCache=new Map();
 function indexedPlace(id){if(placeCacheTrip!==trip||placeCacheList!==trip.customPlaces){placeCacheTrip=trip;placeCacheList=trip.customPlaces;placeCache=new Map(catalog().map(p=>[p.id,p]));for(const p of trip.customPlaces||[])placeCache.set(p.id,{...p,custom:true,area:p.address||'위치 메모 없음',coord:null});}return placeCache.get(id);}
