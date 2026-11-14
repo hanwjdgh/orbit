@@ -19,3 +19,11 @@ for(const saved of [false,true]){
 }
 fs.writeFileSync('work/backup-test.json',text);fs.writeFileSync('work/backup-invalid.json','{"format":"wrong"}');
 console.log('PASS: roundtrip, preserved fields, additive IDs, repeat import, malformed/unsupported input, size limit, save rollback and successful restore');
+{const trip=(id,visits,note)=>({id,name:'분할 '+id,city:'fukuoka',date:'',hotel:null,days:[{start:'09:00',mode:'walk',scenario:'normal',visits:Array.from({length:visits},(_,i)=>({uid:id+'-'+i,place:'ohori',duration:60,fixed:'',...(note?{note}:{})}))}],unassigned:[]});
+const restore=parts=>parts.flatMap(p=>core.readBackup(p,cities));
+const many=Array.from({length:1001},(_,i)=>trip('t'+i,0)),manyParts=core.createBackups(many,cities);assert.equal(manyParts.length,2);assert.equal(restore(manyParts).length,1001);
+const busy=[trip('a',4000),trip('b',4000),trip('c',4000)],busyParts=core.createBackups(busy,cities);assert.equal(busyParts.length,2);assert.equal(restore(busyParts).flatMap(t=>t.days[0].visits).length,12000);
+const heavy=Array.from({length:6},(_,i)=>trip('h'+i,350,'가'.repeat(1000))),heavyParts=core.createBackups(heavy,cities);assert.ok(heavyParts.length>=2);assert.ok(heavyParts.every(p=>new TextEncoder().encode(p).length<=core.BACKUP_MAX_BYTES));assert.equal(restore(heavyParts).length,6);
+assert.equal(core.createBackups([original],cities).length,1);
+assert.throws(()=>core.createBackups([trip('huge',10001)],cities),/분할 huge/);
+console.log('PASS: split backup by trips/visits/bytes, oversized single trip reported');}

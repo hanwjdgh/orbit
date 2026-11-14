@@ -60,11 +60,25 @@ function readBackup(text,cities,{local=false}={}){
     return {name:t.name,city:t.city,date:t.date,days,...(t.customPlaces!==undefined?{customPlaces:customPlaces.map(p=>({id:p.id,name:p.name,address:p.address}))}:{}),hotel:t.hotel?{name:t.hotel.name,address:t.hotel.address}:null,unassigned:(t.unassigned||[]).map(v=>visit(v,true)),...(t.deletedAt?{deletedAt:t.deletedAt}:{})};
   });
 }
-function createBackup(trips,cities){
-  const text=JSON.stringify({format:'orbit-travel-backup',version:1,createdAt:new Date().toISOString(),trips},null,2);
+const BACKUP_MAX_TRIPS=1000,BACKUP_MAX_VISITS=10000;
+const backupText=(trips,createdAt)=>JSON.stringify({format:'orbit-travel-backup',version:1,createdAt,trips});
+function createBackup(trips,cities,createdAt=new Date().toISOString()){
+  const text=backupText(trips,createdAt);
   readBackup(text,cities);return text;
+}
+function createBackups(trips,cities){
+  const createdAt=new Date().toISOString(),bytes=s=>new TextEncoder().encode(s).length,base=bytes(backupText([],createdAt)),parts=[];
+  let part=[],size=base,visits=0;
+  for(const t of trips){
+    const tripSize=bytes(JSON.stringify(t))+1,tripVisits=t.days.reduce((n,d)=>n+d.visits.length,0)+(t.unassigned||[]).length;
+    if(base+tripSize>BACKUP_MAX_BYTES||tripVisits>BACKUP_MAX_VISITS)throw new Error(`'${t.name}' 여행이 백업 한도(5MB·방문 10,000개)를 넘어 백업 파일을 만들 수 없어요. 여행 정보는 그대로 유지됩니다.`);
+    if(part.length&&(part.length>=BACKUP_MAX_TRIPS||visits+tripVisits>BACKUP_MAX_VISITS||size+tripSize>BACKUP_MAX_BYTES)){parts.push(part);part=[];size=base;visits=0;}
+    part.push(t);size+=tripSize;visits+=tripVisits;
+  }
+  parts.push(part);
+  return parts.map(p=>createBackup(p,cities,createdAt));
 }
 function appendBackup(database,trips,id){
   return {...database,trips:[...database.trips,...trips.map(t=>({...structuredClone(t),id:id(),days:t.days.map(d=>({...d,visits:d.visits.map(v=>({...v,uid:id()}))})),unassigned:t.unassigned.map(v=>({...v,uid:id()}))}))]};
 }
-if(typeof module!=='undefined')module.exports={validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,appendBackup,BACKUP_MAX_BYTES};
+if(typeof module!=='undefined')module.exports={validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,createBackups,appendBackup,BACKUP_MAX_BYTES};
