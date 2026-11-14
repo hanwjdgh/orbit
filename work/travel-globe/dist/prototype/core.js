@@ -30,12 +30,12 @@ function tripDateCount(start,end,fallback=4){
 }
 function tripEndDate(start,count){if(!start)return '';const date=new Date(start+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+count-1);return date.toISOString().slice(0,10);}
 const BACKUP_MAX_BYTES=5*1024*1024;
-function readBackup(text,cities){
+function readBackup(text,cities,{local=false}={}){
   const fail=()=>{throw new Error('백업 내용이 올바르지 않거나 지원하지 않는 일정이 포함돼 있어요. 기존 여행은 변경되지 않았습니다.');};
-  if(typeof text!=='string'||new TextEncoder().encode(text).length>BACKUP_MAX_BYTES)throw new Error('5MB 이하의 백업 파일을 선택해 주세요.');
+  if(typeof text!=='string'||(!local&&new TextEncoder().encode(text).length>BACKUP_MAX_BYTES))throw new Error('5MB 이하의 백업 파일을 선택해 주세요.');
   let data;try{data=JSON.parse(text);}catch{throw new Error('파일을 읽을 수 없어요. ORBIT에서 저장한 JSON 백업 파일을 선택해 주세요.');}
   if(!data||data.format!=='orbit-travel-backup'||data.version!==1)throw new Error('지원하지 않는 백업 형식 또는 버전입니다.');
-  if(!Array.isArray(data.trips)||!data.trips.length||data.trips.length>1000)fail();
+  if(!Array.isArray(data.trips)||(!local&&!data.trips.length)||(!local&&data.trips.length>1000))fail();
   const str=(v,max,empty=false)=>typeof v==='string'&&v.length<=max&&(empty||v.trim().length>0);
   let visits=0;
   return data.trips.map(t=>{
@@ -43,8 +43,9 @@ function readBackup(text,cities){
     if(t.date)try{tripDateCount(t.date,t.date);}catch{fail();}
     const customPlaces=t.customPlaces===undefined?[]:t.customPlaces;
     if(!Array.isArray(customPlaces)||customPlaces.length>10000||customPlaces.some(p=>!validCustomPlace(p))||new Set(customPlaces.map(p=>p.id)).size!==customPlaces.length)fail();
+    const placeIds=new Set([...cities[t.city].catalog.map(p=>p.id),...customPlaces.map(p=>p.id)]);
     const visit=(v,held=false)=>{
-      if(++visits>10000||!v||!(cities[t.city].catalog.some(p=>p.id===v.place)||customPlaces.some(p=>p.id===v.place))||!Number.isInteger(v.duration)||v.duration<5||v.duration>720||!(v.fixed===''||minutes(v.fixed)!==null))fail();
+      if((++visits>10000&&!local)||!v||!placeIds.has(v.place)||!Number.isInteger(v.duration)||v.duration<5||v.duration>720||!(v.fixed===''||minutes(v.fixed)!==null))fail();
       if(held&&(!Number.isInteger(v.originalDay)||v.originalDay<1||v.originalDay>14))fail();
       if(v.note!==undefined&&!str(v.note,1000,true))fail();
       return {place:v.place,duration:v.duration,fixed:v.fixed,...(v.note!==undefined?{note:v.note}:{}),...(held?{originalDay:v.originalDay}:{})};
