@@ -1,0 +1,42 @@
+{
+  "format": "orbit-travel-backup",
+  "version": 1,
+  "createdAt": "2026-11-14T08:11:04.393Z",
+  "trips": [
+    {
+      "id": "old-trip",
+      "name": "백업 확인용 여행",
+      "city": "fukuoka",
+      "date": "2026-11-12",
+      "days": [
+        {
+          "start": "08:30",
+          "mode": "walk",
+          "scenario": "failure",
+          "visits": [
+            {
+              "uid": "old-visit",
+              "place": "ohori",
+              "duration": 75,
+              "fixed": "13:30"
+            }
+          ]
+        }
+      ],
+      "hotel": {
+        "name": "숙소 메모",
+        "address": "주소 확인"
+      },
+      "unassigned": [
+        {
+          "uid": "held",
+          "place": "ohori",
+          "duration": 75,
+          "fixed": "13:30",
+          "originalDay": 4
+        }
+      ],
+      "deletedAt": "2026-10-14T00:00:00.000Z"
+    }
+  ]
+}
