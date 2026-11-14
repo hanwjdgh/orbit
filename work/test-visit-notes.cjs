@@ -9,7 +9,7 @@ const moved=structuredClone(trip);moved.days.reverse();const held=core.updateTri
 const handler=app.slice(app.indexOf("$('#editForm').onsubmit="),app.indexOf("\n$('#hotelForm')"));
 for(const saved of [true,false]){
  const t=structuredClone(trip),els={'#editId':{value:'a'},'#editDay':{value:'1'},'#editDuration':{value:'60'},'#editFixed':{value:''},'#editNote':{value:'새 메모\n둘째 줄'},'#editError':{},'#editForm':{},'#edit':{close(){}}};let storage='';
- const ctx={trip:t,dayIndex:0,day:()=>t.days[0],$:k=>els[k],structuredClone,minutes:core.minutes,persist:()=>{if(saved)storage=JSON.stringify(t);return saved;},render(){},toast(){}};vm.createContext(ctx);vm.runInContext(handler,ctx);els['#editForm'].onsubmit({preventDefault(){}});
+ const ctx={trip:t,dayIndex:0,day:()=>t.days[0],$:k=>els[k],structuredClone,minutes:core.minutes,persist:()=>{if(saved)storage=JSON.stringify(t);return saved;},render(){},refocus(){},toast(){}};vm.createContext(ctx);vm.runInContext(handler,ctx);els['#editForm'].onsubmit({preventDefault(){}});
  if(saved){assert.equal(JSON.parse(storage).days[1].visits[0].note,'새 메모\n둘째 줄');assert.equal(t.days[0].visits[0].note,'두 번째 방문');els['#editId'].value='b';els['#editDay'].value='0';els['#editNote'].value='';els['#editForm'].onsubmit({preventDefault(){}});assert.equal(t.days[0].visits[0].note,'');}
  else{assert.deepEqual(t,trip);assert.match(els['#editError'].textContent,/저장하지 못/);assert.equal(els['#editNote'].value,'새 메모\n둘째 줄');}
 }
