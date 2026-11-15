@@ -1,6 +1,6 @@
 // Read-only views: the trip remains the single source of itinerary data.
 function travelDayInfo(t,now=new Date()){
-  const zone=({fukuoka:'Asia/Tokyo',tokyo:'Asia/Tokyo',osaka:'Asia/Tokyo',paris:'Europe/Paris',london:'Europe/London',newyork:'America/New_York'})[t.city]||'UTC';
+  const zone=({fukuoka:'Asia/Tokyo',tokyo:'Asia/Tokyo',osaka:'Asia/Tokyo',takamatsu:'Asia/Tokyo',paris:'Europe/Paris',london:'Europe/London',newyork:'America/New_York'})[t.city]||'UTC';
   const parts=new Intl.DateTimeFormat('en-US',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
   const part=type=>parts.find(p=>p.type===type).value;
   const date=`${part('year')}-${part('month')}-${part('day')}`;
