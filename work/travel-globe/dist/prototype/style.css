@@ -85,3 +85,6 @@
 @media(max-width:700px){.tripbar-tools button,#mobileView{flex:1 1 calc(50% - 8px)}.print-check input{min-height:20px;flex-shrink:0}}
 
 .storage-notice{padding:14px 20px;background:#fff0e5;border-bottom:1px solid #ba7447;color:#7c3821}.storage-notice p{color:inherit;margin:0 0 8px;overflow-wrap:anywhere}#createError,#hotelError{color:#a34c39}
+/* Leg rows: manual travel time, directions link, inline editor. */
+.leg{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.leg a,.leg button{font-size:12px}.leg-editor{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px}.leg-editor input{width:6em}#legError:empty{display:none}
+.pin.custom-pin{border-style:dashed}

@@ -9,7 +9,7 @@ let i=0;const before={trips:[original],active:'old-trip',three:true},after=core.
 assert.equal(before.trips.length,1);assert.equal(after.trips.length,2);assert.notEqual(after.trips[1].id,original.id);assert.notEqual(after.trips[1].days[0].visits[0].uid,after.trips[1].unassigned[0].uid);assert.equal(after.active,before.active);
 const twice=core.appendBackup(after,parsed,()=>`new-${i++}`);assert.equal(twice.trips.length,3);assert.equal(new Set(twice.trips.map(t=>t.id)).size,3);
 assert.deepEqual(core.readBackup(core.createBackup(after.trips,cities),cities)[1],parsed[0]);
-for(const modify of [d=>d.version=2,d=>d.trips[0].city='unknown',d=>d.trips[0].days[0].visits[0].place='missing',d=>d.trips[0].date='2026-02-30',d=>d.trips[0].days[0].start='25:00',d=>d.trips[0].unassigned[0].duration=-1,d=>d.trips[0].hotel.name={},d=>d.trips[0].days[0].visits[0].fixed='24:60']){const data=JSON.parse(text);modify(data);assert.throws(()=>core.readBackup(JSON.stringify(data),cities));}
+for(const modify of [d=>d.version=3,d=>d.trips[0].city='unknown',d=>d.trips[0].days[0].visits[0].place='missing',d=>d.trips[0].date='2026-02-30',d=>d.trips[0].days[0].start='25:00',d=>d.trips[0].unassigned[0].duration=-1,d=>d.trips[0].hotel.name={},d=>d.trips[0].days[0].visits[0].fixed='24:60']){const data=JSON.parse(text);modify(data);assert.throws(()=>core.readBackup(JSON.stringify(data),cities));}
 assert.throws(()=>core.readBackup('{broken',cities));assert.throws(()=>core.readBackup('x'.repeat(core.BACKUP_MAX_BYTES+1),cities));
 // Exercise the actual UI restore handler, including storage failure, without touching browser data.
 const app=fs.readFileSync('work/travel-globe/dist/prototype/app.js','utf8'),handler=app.slice(app.indexOf("$('#backupRestore').onclick=()=>{"));

@@ -34,7 +34,7 @@ el('#printScope').value='day';el('#printNotes').checked=false;el('#printRun').on
 assert.equal(prints,1);assert.equal(el('#printDialog').open,false);assert.ok(!el('#printSheet').innerHTML.includes('予約'));assert.ok(!el('#printSheet').innerHTML.includes('Day 2'));
 trip.days[0].scenario='failure';context.renderDayView(new Date('2026-10-15T00:00:00Z'));assert.match(el('#panelContent').innerHTML,/종료 시각 미확인/);assert.match(context.printableItinerary(),/종료 시각 미확인/);
 trip.days[0].visits[1].fixed='13:00';assert.match(context.printableItinerary(),/앞 구간이 미확인/);
-trip.days[0].scenario='normal';trip.days[0].visits[1].fixed='09:30';assert.match(context.printableItinerary(),/늦는 예시/);
+assert.match(context.printableItinerary(),/앞 장소에서 이동시간 미확인/);trip.days[0].legs={['walk:known>'+trip.days[0].visits[1].uid]:30};trip.days[0].visits[1].fixed='09:30';const legHtml=context.printableItinerary();assert.match(legHtml,/고정 시각보다 \d+분 늦어요/);assert.match(legHtml,/앞 장소에서 30분 이동\(직접 입력\)/);assert.ok(!legHtml.includes('예시'),'no example wording left');
 console.log('PASS: city date boundaries, DST, missing dates, out-of-trip date, navigation, empty day, locations, print scopes/notes/held visits, escaping, unknown legs, conflicts and no data mutations');
 // Screen proof of the exact print stylesheet; pagination still depends on the print engine.
 const css=fs.readFileSync('work/travel-globe/dist/prototype/style.css','utf8').replace('@media print{','@media screen{');

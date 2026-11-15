@@ -1,10 +1,21 @@
 
-function validCustomPlace(p){return !!p&&typeof p.id==='string'&&/^custom-[a-zA-Z0-9-]+$/.test(p.id)&&p.id.length<=100&&typeof p.name==='string'&&p.name.trim().length>0&&p.name.length<=80&&typeof p.address==='string'&&p.address.length<=300;}
-function resolvePlace(t,cities,id){const p=(t.customPlaces||[]).find(p=>p.id===id);return p?{...p,custom:true,area:p.address||'위치 메모 없음',coord:null}:cities[t.city].catalog.find(p=>p.id===id);}
+const validCoord=c=>Array.isArray(c)&&c.length===2&&c.every(Number.isFinite)&&Math.abs(c[0])<=180&&Math.abs(c[1])<=90;
+function validCustomPlace(p){return !!p&&(p.coord===undefined||validCoord(p.coord))&&typeof p.id==='string'&&/^custom-[a-zA-Z0-9-]+$/.test(p.id)&&p.id.length<=100&&typeof p.name==='string'&&p.name.trim().length>0&&p.name.length<=80&&typeof p.address==='string'&&p.address.length<=300;}
+function resolvePlace(t,cities,id){const p=(t.customPlaces||[]).find(p=>p.id===id);return p?{...p,custom:true,area:p.address||'위치 메모 없음',coord:p.coord||null}:cities[t.city].catalog.find(p=>p.id===id);}
 function routeFeatures(visits,lookup){const features=[];for(let i=1;i<visits.length;i++){const a=lookup(visits[i-1].place)?.coord,b=lookup(visits[i].place)?.coord;if(a&&b)features.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[a,b]}});}return features;}
 function clockText(n){if(n==null)return '미확인';const days=Math.floor(n/1440),h=Math.floor(n%1440/60),m=n%60;return (days?`+${days}일 `:'')+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')}
 function minutes(s){if(!/^\d{2}:\d{2}$/.test(s||''))return null;const [h,m]=s.split(':').map(Number);return h<24&&m<60?h*60+m:null}
-function buildTimeline(day){let cursor=minutes(day.start)??540,totalMove=0,complete=true;const rows=day.visits.map((v,i)=>{const leg=i===0?0:(day.scenario==='failure'&&i===1?null:(day.mode==='walk'?[35,45,25][(i-1)%3]:[18,24,16][(i-1)%3]));if(leg==null){cursor=null;complete=false}else{if(cursor!=null)cursor+=leg;totalMove+=leg}const expected=cursor,fixed=minutes(v.fixed),late=fixed!=null&&expected!=null?Math.max(0,expected-fixed):0;const start=fixed!=null?(expected==null?fixed:Math.max(expected,fixed)):expected;const end=start==null?null:start+v.duration;cursor=end;return {...v,leg,expected,start,end,late,anchored:fixed!=null&&expected==null}});return {rows,end:cursor,complete,totalMove,totalStay:day.visits.reduce((n,v)=>n+v.duration,0)}}
+const legKey=(mode,a,b)=>`${mode}:${a.uid}>${b.uid}`;
+function buildTimeline(day){let cursor=minutes(day.start)??540,totalMove=0,complete=true;const rows=day.visits.map((v,i)=>{let leg=0,legSource=null;if(i){const prev=day.visits[i-1],manual=day.legs?.[legKey(day.mode,prev,v)];if(prev.place===v.place)legSource='same';else if(Number.isInteger(manual)){leg=manual;legSource='manual';}else leg=null;}if(leg==null){cursor=null;complete=false}else{if(cursor!=null)cursor+=leg;totalMove+=leg}const expected=cursor,fixed=minutes(v.fixed),late=fixed!=null&&expected!=null?Math.max(0,expected-fixed):0;const start=fixed!=null?(expected==null?fixed:Math.max(expected,fixed)):expected;const end=start==null?null:start+v.duration;cursor=end;return {...v,leg,legSource,expected,start,end,late,anchored:fixed!=null&&expected==null}});return {rows,end:cursor,complete,totalMove,totalStay:day.visits.reduce((n,v)=>n+v.duration,0)}}
+function legLabel(v){return v.legSource==='same'?'같은 장소':v.leg===null?'이동시간 미확인':v.leg+'분 이동(직접 입력)';}
+function pruneLegs(day){if(!day.legs)return;const keep=new Set(day.visits.slice(1).flatMap((v,i)=>['walk','transit'].map(m=>legKey(m,day.visits[i],v))));for(const k of Object.keys(day.legs))if(!keep.has(k))delete day.legs[k];if(!Object.keys(day.legs).length)delete day.legs;}
+function parseLocation(text){
+  const s=String(text||'').trim(),n=String.raw`(-?\d{1,3}(?:\.\d+)?)`;
+  const m=s.match(new RegExp('!3d'+n+'!4d'+n))||s.match(new RegExp('@'+n+','+n))||s.match(new RegExp('[?&](?:q|query|ll)='+n+String.raw`(?:,|%2C)\s*`+n,'i'))||s.match(new RegExp('^'+n+String.raw`\s*,\s*`+n+'$'));
+  if(!m)return null;const coord=[Number(m[2]),Number(m[1])];return validCoord(coord)?coord:null;
+}
+function distanceKm([lng1,lat1],[lng2,lat2]){const rad=Math.PI/180,a=Math.sin((lat2-lat1)*rad/2)**2+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin((lng2-lng1)*rad/2)**2;return 12742*Math.asin(Math.sqrt(a));}
+function directionsUrl(a,b,mode){const where=p=>p.coord?p.coord[1]+','+p.coord[0]:[p.name,p.address].filter(Boolean).join(' ');return 'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',origin:where(a),destination:where(b),travelmode:mode==='walk'?'walking':'transit'});}
 function updateTripSettings(original,{name,date,dayCount,overflow}){
   name=String(name||'').trim();date=String(date||'');
   if(!name||name.length>60)throw new Error('여행 이름을 1~60자로 입력해 주세요.');
@@ -34,7 +45,7 @@ function readBackup(text,cities,{local=false}={}){
   const fail=()=>{throw new Error('백업 내용이 올바르지 않거나 지원하지 않는 일정이 포함돼 있어요. 기존 여행은 변경되지 않았습니다.');};
   if(typeof text!=='string'||(!local&&new TextEncoder().encode(text).length>BACKUP_MAX_BYTES))throw new Error('5MB 이하의 백업 파일을 선택해 주세요.');
   let data;try{data=JSON.parse(text);}catch{throw new Error('파일을 읽을 수 없어요. ORBIT에서 저장한 JSON 백업 파일을 선택해 주세요.');}
-  if(!data||data.format!=='orbit-travel-backup'||data.version!==1)throw new Error('지원하지 않는 백업 형식 또는 버전입니다.');
+  if(!data||data.format!=='orbit-travel-backup'||![1,2].includes(data.version))throw new Error('지원하지 않는 백업 형식 또는 버전입니다.');
   if(!Array.isArray(data.trips)||(!local&&!data.trips.length)||(!local&&data.trips.length>1000))fail();
   const str=(v,max,empty=false)=>typeof v==='string'&&v.length<=max&&(empty||v.trim().length>0);
   let visits=0;
@@ -52,16 +63,22 @@ function readBackup(text,cities,{local=false}={}){
     };
     const days=t.days.map(d=>{
       if(!d||minutes(d.start)===null||!['walk','transit'].includes(d.mode)||!['normal','failure'].includes(d.scenario)||!Array.isArray(d.visits))fail();
-      return {start:d.start,mode:d.mode,scenario:d.scenario,visits:d.visits.map(v=>visit(v))};
+      let legs;
+      if(d.legs!==undefined){
+        if(!d.legs||typeof d.legs!=='object'||Array.isArray(d.legs)||Object.keys(d.legs).length>d.visits.length*2)fail();
+        const index=new Map(d.visits.map((v,i)=>[v?.uid,i]));legs={};
+        for(const [k,minutes] of Object.entries(d.legs)){const m=/^(walk|transit):([A-Za-z0-9-]+)>([A-Za-z0-9-]+)$/.exec(k);if(!m||!Number.isInteger(minutes)||minutes<0||minutes>1440)fail();if(index.has(m[2])&&index.has(m[3]))legs[m[1]+':'+index.get(m[2])+'>'+index.get(m[3])]=minutes;}
+      }
+      return {start:d.start,mode:d.mode,scenario:d.scenario,visits:d.visits.map(v=>visit(v)),...(legs&&Object.keys(legs).length?{legs}:{})};
     });
     if(t.unassigned!==undefined&&!Array.isArray(t.unassigned))fail();
     if(t.hotel!==null&&(!t.hotel||!str(t.hotel.name,80)||!str(t.hotel.address,200,true)))fail();
     if(t.deletedAt!==undefined&&(!str(t.deletedAt,40)||!Number.isFinite(Date.parse(t.deletedAt))))fail();
-    return {name:t.name,city:t.city,date:t.date,days,...(t.customPlaces!==undefined?{customPlaces:customPlaces.map(p=>({id:p.id,name:p.name,address:p.address}))}:{}),hotel:t.hotel?{name:t.hotel.name,address:t.hotel.address}:null,unassigned:(t.unassigned||[]).map(v=>visit(v,true)),...(t.deletedAt?{deletedAt:t.deletedAt}:{})};
+    return {name:t.name,city:t.city,date:t.date,days,...(t.customPlaces!==undefined?{customPlaces:customPlaces.map(p=>({id:p.id,name:p.name,address:p.address,...(p.coord?{coord:[...p.coord]}:{})}))}:{}),hotel:t.hotel?{name:t.hotel.name,address:t.hotel.address}:null,unassigned:(t.unassigned||[]).map(v=>visit(v,true)),...(t.deletedAt?{deletedAt:t.deletedAt}:{})};
   });
 }
 const BACKUP_MAX_TRIPS=1000,BACKUP_MAX_VISITS=10000;
-const backupText=(trips,createdAt)=>JSON.stringify({format:'orbit-travel-backup',version:1,createdAt,trips});
+const backupText=(trips,createdAt)=>JSON.stringify({format:'orbit-travel-backup',version:2,createdAt,trips});
 function createBackup(trips,cities,createdAt=new Date().toISOString()){
   const text=backupText(trips,createdAt);
   readBackup(text,cities);return text;
@@ -79,6 +96,6 @@ function createBackups(trips,cities){
   return parts.map(p=>createBackup(p,cities,createdAt));
 }
 function appendBackup(database,trips,id){
-  return {...database,trips:[...database.trips,...trips.map(t=>({...structuredClone(t),id:id(),days:t.days.map(d=>({...d,visits:d.visits.map(v=>({...v,uid:id()}))})),unassigned:t.unassigned.map(v=>({...v,uid:id()}))}))]};
+  return {...database,trips:[...database.trips,...trips.map(t=>({...structuredClone(t),id:id(),days:t.days.map(d=>{const visits=d.visits.map(v=>({...v,uid:id()}));return {...d,visits,...(d.legs?{legs:Object.fromEntries(Object.entries(d.legs).map(([k,minutes])=>{const [,mode,i,j]=/^(\w+):(\d+)>(\d+)$/.exec(k);return [mode+':'+visits[i].uid+'>'+visits[j].uid,minutes];}))}:{})};}),unassigned:t.unassigned.map(v=>({...v,uid:id()}))}))]};
 }
-if(typeof module!=='undefined')module.exports={validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,createBackups,appendBackup,BACKUP_MAX_BYTES};
+if(typeof module!=='undefined')module.exports={legLabel,validCoord,legKey,pruneLegs,parseLocation,distanceKm,directionsUrl,validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,createBackups,appendBackup,BACKUP_MAX_BYTES};
