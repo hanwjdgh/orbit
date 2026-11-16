@@ -82,6 +82,10 @@ ui.$('#customCoord').value='https://www.google.com/maps/@33.5897,130.4207,17z';u
 ui.run("detail('custom-a')");ui.$('#customCoordClear').onclick();assert.equal(ui.stored().trips[0].customPlaces[0].coord,undefined);
 ui.run("openCustom()");ui.$('#customName').value='새 카페';ui.$('#customAddress').value='';ui.$('#customLocation').value='https://maps.app.goo.gl/x';ui.$('#customDay').value='0';ui.$('#customForm').onsubmit({preventDefault(){}});assert.match(ui.$('#customError').textContent,/위도, 경도/);assert.equal(ui.stored().trips[0].customPlaces.length,1);
 ui.$('#customLocation').value='33.59, 130.40';ui.$('#customForm').onsubmit({preventDefault(){}});assert.deepEqual(ui.stored().trips[0].customPlaces[1].coord,[130.40,33.59]);
+// Search panel links the current query to Google Maps, scoped to the trip city.
+assert.equal(new URL(core.mapsSearchUrl(' 우동 바카이치다이 ','TAKAMATSU')).searchParams.get('query'),'우동 바카이치다이 TAKAMATSU');assert.equal(new URL(core.mapsSearchUrl('','TAKAMATSU')).searchParams.get('query'),'TAKAMATSU');
+ui.run("view='search';query='우동';render()");assert.match(ui.$('#panelContent').innerHTML,/id="googleSearch" href="https:\/\/www.google.com\/maps\/search\/\?api=1&amp;query=%EC%9A%B0%EB%8F%99\+FUKUOKA" target="_blank" rel="noopener noreferrer"/);
+ui.run("query='라멘';renderSearch(true)");assert.equal(new URL(ui.$('#googleSearch').href).searchParams.get('query'),'라멘 FUKUOKA');
 ui.run("dayIndex=0;view='timeline';render()");ui.click({leg:'1'});ui.$('#legMinutes').value='12';ui.click({legSave:'1'});
 ui.$('#export').onclick();
 async function finishApp(){const text=await ui.blob().text();assert.match(text,/↓ 12분 이동\(직접 입력\)/);assert.match(text,/↓ 이동시간 미확인/);assert.match(text,/새 카페 \[직접 추가 · 위치 등록됨\]/);assert.ok(!text.includes('시안 예시'));
