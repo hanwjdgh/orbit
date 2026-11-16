@@ -5,8 +5,11 @@ const pins=new Map();let pinSignature='',toastTimer;
 let storageRaw=null,storageLocked=false,saveFailed=false,rawSaved=false;
 const validId=id=>typeof id==='string'&&/^[A-Za-z0-9-]{1,100}$/.test(id);
 function storageMessage(message){saveFailed=true;$('#storageNotice').hidden=false;$('#storageMessage').textContent=message;$('#saveStatus').textContent='저장되지 않음';$('#recoverStorage').hidden=!storageLocked||storageRaw===null;$('#resetStorage').hidden=!(storageLocked&&rawSaved);}
-try{
-  storageRaw=localStorage.getItem(KEY);
+const STORAGE_UNAVAILABLE='이 화면에서는 브라우저 저장소를 쓸 수 없어 여행을 저장할 수 없어요. Chrome 같은 일반 브라우저로 파일을 열거나 로컬 서버 주소(http://127.0.0.1:4173)로 열어 주세요.';
+let storageUnavailable=false;
+try{storageRaw=localStorage.getItem(KEY);}catch{storageUnavailable=true;storageLocked=true;}
+if(storageUnavailable)storageMessage(STORAGE_UNAVAILABLE);
+else try{
   if(storageRaw!==null){
     const saved=JSON.parse(storageRaw);
     if(!saved||!Array.isArray(saved.trips))throw Error('invalid');
@@ -28,6 +31,7 @@ let placeCacheTrip=null,placeCacheList=null,placeCache=new Map();
 function indexedPlace(id){if(placeCacheTrip!==trip||placeCacheList!==trip.customPlaces){placeCacheTrip=trip;placeCacheList=trip.customPlaces;placeCache=new Map(catalog().map(p=>[p.id,p]));for(const p of trip.customPlaces||[])placeCache.set(p.id,{...p,custom:true,area:p.address||'위치 메모 없음',coord:p.coord||null});}return placeCache.get(id);}
 function persist(){
   trip?.days.forEach(pruneLegs);
+  if(storageUnavailable){storageMessage(STORAGE_UNAVAILABLE);return false;}
   if(storageLocked){storageMessage('저장 자료 보호 중입니다. 원본 자료를 보관하고 문제를 해결한 뒤 다시 열어 주세요. 변경은 적용하지 않았습니다.');return false;}
   try{
     if(localStorage.getItem(KEY)!==storageRaw){storageMessage('다른 탭에서 저장 내용이 바뀌었습니다. 입력 중인 내용을 따로 보관한 뒤 새로고침해 주세요. 기존 저장 내용은 덮어쓰지 않았습니다.');return false;}

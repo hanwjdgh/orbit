@@ -26,7 +26,7 @@ const reopened=boot(b.stored());reopened.run("openTrip('existing')");assert.equa
 const concurrent=boot(raw);concurrent.run("openTrip('existing')");const latest=JSON.parse(raw);latest.trips[0].name='다른 탭에서 수정';concurrent.external(JSON.stringify(latest));concurrent.run("deleteVisit('a')");assert.equal(JSON.parse(concurrent.stored()).trips[0].name,'다른 탭에서 수정');assert.equal(concurrent.run('day().visits.length'),2);assert.match(concurrent.$('#storageMessage').textContent,/다른 탭/);
 // Invalid data is never silently filtered and overwritten.
 for(const damaged of ['{broken',JSON.stringify({trips:[initial,{name:'손상된 여행'}]}),JSON.stringify({trips:[initial,initial]})]){const invalid=boot(damaged);assert.equal(invalid.run('storageLocked'),true);assert.equal(invalid.run('persist()'),false);assert.equal(invalid.writes(),0);assert.equal(invalid.stored(),damaged);invalid.$('#recoverStorage').onclick();assert.ok(invalid.blob());}
-const unreadable=boot(raw,true);assert.equal(unreadable.run('storageLocked'),true);assert.equal(unreadable.run('persist()'),false);assert.equal(unreadable.writes(),0);
+const unreadable=boot(raw,true);assert.equal(unreadable.run('storageLocked'),true);assert.match(unreadable.$('#storageMessage').textContent,/저장소를 쓸 수 없어/);assert.equal(unreadable.$('#recoverStorage').hidden,true);assert.equal(unreadable.run('persist()'),false);assert.equal(unreadable.writes(),0);
 // IDs rendered into HTML attributes must be plain tokens.
 for(const mutate of [t=>t.days[0].visits[0].uid='a" onclick="x',t=>t.unassigned[0].uid='<b>',t=>t.id='x" y']){const t=structuredClone(initial);mutate(t);assert.equal(boot(JSON.stringify({trips:[t]})).run('storageLocked'),true);}
 // Damaged data: reset offered only after raw download, and only on confirm.
