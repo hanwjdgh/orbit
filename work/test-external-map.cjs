@@ -83,6 +83,18 @@ ui.$('#customCoord').value='https://www.google.com/maps/@33.5897,130.4207,17z';u
 ui.run("detail('custom-a')");ui.$('#customCoordClear').onclick();assert.equal(ui.stored().trips[0].customPlaces[0].coord,undefined);
 ui.run("openCustom()");ui.$('#customName').value='새 카페';ui.$('#customAddress').value='';ui.$('#customLocation').value='https://maps.app.goo.gl/x';ui.$('#customDay').value='0';ui.$('#customForm').onsubmit({preventDefault(){}});assert.match(ui.$('#customError').textContent,/위도, 경도/);assert.equal(ui.stored().trips[0].customPlaces.length,1);
 ui.$('#customLocation').value='33.59, 130.40';ui.$('#customForm').onsubmit({preventDefault(){}});assert.deepEqual(ui.stored().trips[0].customPlaces[1].coord,[130.40,33.59]);
+// Name from a Google Maps place link.
+assert.equal(core.placeNameFromLink('https://www.google.com/maps/place/%EC%B9%B8%EC%B9%B4%EC%BC%80%EC%9D%B4+%EC%BC%80%EC%9D%B4%EB%B8%94%EC%B9%B4/@34.51,134.29,16.5z/data=!3d34.5156!4d134.3006'),'칸카케이 케이블카');
+assert.equal(core.placeNameFromLink('https://www.google.com/maps/@33.59,130.40,15z'),'');assert.equal(core.placeNameFromLink('33.59, 130.40'),'');assert.equal(core.placeNameFromLink('https://www.google.com/maps/place/%E0%A4%A/@1,2'),'','bad encoding is ignored');
+// Quick add from the search panel: paste link, pick day, add.
+const link='https://www.google.com/maps/place/%EC%9A%B0%EB%8F%99+%EA%B0%80%EA%B2%8C/@33.59,130.40,17z/data=!3d33.5911!4d130.4012';
+ui.run("view='search';query='';render()");assert.match(ui.$('#panelContent').innerHTML,/id="quickLink"/);
+ui.$('#quickLink').value='하카타역';ui.$('#quickDay').value='0';ui.$('#quickForm').onsubmit({preventDefault(){}});assert.match(ui.$('#quickError').textContent,/위도, 경도/);
+let before=ui.stored().trips[0];ui.$('#quickLink').value=link;ui.$('#quickForm').onsubmit({preventDefault(){}});
+let after=ui.stored().trips[0],added=after.customPlaces.at(-1);assert.equal(after.customPlaces.length,before.customPlaces.length+1);assert.equal(added.name,'우동 가게');assert.deepEqual(added.coord,[130.4012,33.5911]);assert.equal(after.days[0].visits.at(-1).place,added.id);assert.equal(ui.run('dayIndex'),0);assert.equal(ui.run('view'),'plan');
+ui.run("view='search';render()");ui.$('#quickLink').value=link;ui.$('#quickDay').value='0';ui.$('#quickForm').onsubmit({preventDefault(){}});
+const again=ui.stored().trips[0];assert.equal(again.customPlaces.length,after.customPlaces.length,'same link reuses the place');assert.equal(again.days[0].visits.at(-1).place,added.id);
+ui.run("view='search';render()");ui.$('#quickLink').value='33.6, 130.41';ui.$('#quickDay').value='0';ui.$('#quickForm').onsubmit({preventDefault(){}});assert.equal(ui.$('#custom').open,true,'no name in link opens the full form');assert.equal(ui.$('#customLocation').value,'33.6, 130.41');assert.match(ui.$('#customError').textContent,/이름/);ui.$('#custom').close();
 // Search panel links the current query to Google Maps, scoped to the trip city.
 assert.equal(new URL(core.mapsSearchUrl(' 우동 바카이치다이 ','TAKAMATSU')).searchParams.get('query'),'우동 바카이치다이 TAKAMATSU');assert.equal(new URL(core.mapsSearchUrl('','TAKAMATSU')).searchParams.get('query'),'TAKAMATSU');
 ui.run("view='search';query='우동';render()");assert.match(ui.$('#panelContent').innerHTML,/id="googleSearch" href="https:\/\/www.google.com\/maps\/search\/\?api=1&amp;query=%EC%9A%B0%EB%8F%99\+FUKUOKA" target="_blank" rel="noopener noreferrer"/);

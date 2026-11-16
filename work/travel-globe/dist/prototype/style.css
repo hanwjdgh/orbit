@@ -89,3 +89,4 @@
 .leg{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.leg a,.leg button{font-size:12px}.leg-editor{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px}.leg-editor input{width:6em}#legError:empty{display:none}
 .pin.custom-pin{border-style:dashed}
 .google-search{display:flex;flex-direction:column;gap:4px;margin:10px 0}.google-search a{font-weight:600}
+.google-search label{display:flex;flex-direction:column;gap:4px}.quick-row{display:flex;flex-wrap:wrap;gap:8px}.quick-row select{flex:1 1 140px;min-width:0}#quickError:empty{display:none}
