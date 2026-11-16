@@ -5,6 +5,7 @@ const cities=vm.runInNewContext(fs.readFileSync('work/travel-globe/dist/prototyp
 // parseLocation: [lng, lat] from Google links or raw coordinates.
 const P=core.parseLocation;
 assert.deepEqual(P('https://www.google.com/maps/place/Ohori/@33.5800,130.3700,17z/data=!3m1!4b1!4m6!3m5!1s0x0:0x0!8m2!3d33.5861!4d130.3764'),[130.3764,33.5861],'prefers !3d!4d place pin over viewport');
+assert.deepEqual(P('https://www.google.com/maps/place/%EC%B9%B8%EC%B9%B4%EC%BC%80%EC%9D%B4+%EC%BC%80%EC%9D%B4%EB%B8%94%EC%B9%B4/@34.5118679,134.298395,16.5z/data=!4m15!1m8!3m7!1s0x3553c1c5548d47df:0x72f429d49c1ef71b!2z7J2867O4IOqwgOqwgOyZgO2YhCDri6TsubTrp4jsk7Dsi5w!3b1!8m2!3d34.342542!4d134.0465405!16zL20vMGdwNnJu!3m5!1s0x3554796f331d93a1:0x1564062946a86f6d!8m2!3d34.5156402!4d134.3006589!16s%2Fm%2F0j3fg5r?entry=ttu&g_ep=EgoyMDI2MTExMC4wIKXMDSoASAFQAw%3D%3D'),[134.3006589,34.5156402],'last !3d!4d is the selected place, earlier ones are previous context');
 assert.deepEqual(P('https://www.google.com/maps/@33.5902,130.4017,15z'),[130.4017,33.5902]);
 assert.deepEqual(P('https://maps.google.com/?q=33.59,130.40'),[130.40,33.59]);
 assert.deepEqual(P('https://www.google.com/maps/search/?api=1&query=33.59%2C130.40'),[130.40,33.59]);

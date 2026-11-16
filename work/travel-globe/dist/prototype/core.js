@@ -11,7 +11,7 @@ function legLabel(v){return v.legSource==='same'?'같은 장소':v.leg===null?'�
 function pruneLegs(day){if(!day.legs)return;const keep=new Set(day.visits.slice(1).flatMap((v,i)=>['walk','transit'].map(m=>legKey(m,day.visits[i],v))));for(const k of Object.keys(day.legs))if(!keep.has(k))delete day.legs[k];if(!Object.keys(day.legs).length)delete day.legs;}
 function parseLocation(text){
   const s=String(text||'').trim(),n=String.raw`(-?\d{1,3}(?:\.\d+)?)`;
-  const m=s.match(new RegExp('!3d'+n+'!4d'+n))||s.match(new RegExp('@'+n+','+n))||s.match(new RegExp('[?&](?:q|query|ll)='+n+String.raw`(?:,|%2C)\s*`+n,'i'))||s.match(new RegExp('^'+n+String.raw`\s*,\s*`+n+'$'));
+  const m=[...s.matchAll(new RegExp('!3d'+n+'!4d'+n,'g'))].at(-1)||s.match(new RegExp('@'+n+','+n))||s.match(new RegExp('[?&](?:q|query|ll)='+n+String.raw`(?:,|%2C)\s*`+n,'i'))||s.match(new RegExp('^'+n+String.raw`\s*,\s*`+n+'$'));
   if(!m)return null;const coord=[Number(m[2]),Number(m[1])];return validCoord(coord)?coord:null;
 }
 function distanceKm([lng1,lat1],[lng2,lat2]){const rad=Math.PI/180,a=Math.sin((lat2-lat1)*rad/2)**2+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin((lng2-lng1)*rad/2)**2;return 12742*Math.asin(Math.sqrt(a));}
