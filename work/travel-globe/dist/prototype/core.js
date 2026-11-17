@@ -18,6 +18,21 @@ function distanceKm([lng1,lat1],[lng2,lat2]){const rad=Math.PI/180,a=Math.sin((l
 function placeNameFromLink(text){const m=/\/maps\/place\/([^/@?#]+)/.exec(String(text||''));if(!m)return '';try{return decodeURIComponent(m[1].replace(/\+/g,' ')).trim().slice(0,80);}catch{return '';}}
 function mapsSearchUrl(query,cityName){return 'https://www.google.com/maps/search/?'+new URLSearchParams({api:'1',query:[String(query||'').trim(),cityName].filter(Boolean).join(' ')});}
 function directionsUrl(a,b,mode){const where=p=>p.coord?p.coord[1]+','+p.coord[0]:[p.name,p.address].filter(Boolean).join(' ');return 'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',origin:where(a),destination:where(b),travelmode:mode==='walk'?'walking':'transit'});}
+const CURRENCIES={JPY:{label:'엔',symbol:'¥',decimals:0},KRW:{label:'원',symbol:'₩',decimals:0},USD:{label:'달러',symbol:'$',decimals:2},EUR:{label:'유로',symbol:'€',decimals:2},GBP:{label:'파운드',symbol:'£',decimals:2}};
+const EXPENSE_CATEGORIES={food:'식비',transport:'교통',lodging:'숙박',activity:'입장·체험',shopping:'쇼핑',other:'기타'};
+function cityCurrency(c){return ({'일본':'JPY','대한민국':'KRW','미국':'USD','프랑스':'EUR','영국':'GBP'})[c?.country]||'KRW';}
+function formatMoney(amount,currency){const d=CURRENCIES[currency].decimals;return CURRENCIES[currency].symbol+amount.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function validExpense(e,dayCount){
+  const c=e&&Object.hasOwn(CURRENCIES,e.currency)?CURRENCIES[e.currency]:null,scaled=c&&e.amount*10**c.decimals;
+  return !!c&&typeof e.id==='string'&&/^[A-Za-z0-9-]{1,100}$/.test(e.id)&&Number.isInteger(e.day)&&e.day>=0&&e.day<dayCount&&typeof e.amount==='number'&&Number.isFinite(e.amount)&&e.amount>0&&e.amount<=1e8&&Math.abs(Math.round(scaled)-scaled)<1e-6&&Object.hasOwn(EXPENSE_CATEGORIES,e.category)&&(e.note===undefined||(typeof e.note==='string'&&e.note.length<=100))&&(e.createdAt===undefined||(typeof e.createdAt==='string'&&e.createdAt.length<=40));
+}
+function expenseTotals(list,rates={}){
+  const sum=(a,b)=>Math.round(((a||0)+b)*100)/100,byCurrency={},byCategory={},byDay={};
+  for(const x of list){byCurrency[x.currency]=sum(byCurrency[x.currency],x.amount);for(const [o,k] of [[byCategory,x.category],[byDay,x.day]]){o[k]??={};o[k][x.currency]=sum(o[k][x.currency],x.amount);}}
+  const missingRates=Object.keys(byCurrency).filter(c=>c!=='KRW'&&!(rates[c]>0));
+  return {byCurrency,byCategory,byDay,missingRates,krw:missingRates.length?null:Math.round(Object.entries(byCurrency).reduce((s,[c,a])=>s+a*(c==='KRW'?1:rates[c]),0))};
+}
+function formatTotals(byCurrency){return Object.keys(CURRENCIES).filter(c=>byCurrency[c]).map(c=>formatMoney(byCurrency[c],c)).join(' · ');}
 function updateTripSettings(original,{name,date,dayCount,overflow}){
   name=String(name||'').trim();date=String(date||'');
   if(!name||name.length>60)throw new Error('여행 이름을 1~60자로 입력해 주세요.');
@@ -29,6 +44,7 @@ function updateTripSettings(original,{name,date,dayCount,overflow}){
   next.days=next.days.slice(0,dayCount);
   while(next.days.length<dayCount)next.days.push({start:'09:00',mode:'transit',scenario:'normal',visits:[]});
   if(removed.length){if(overflow==='hold')next.unassigned.push(...removed);else next.days[dayCount-1].visits.push(...removed.map(({originalDay,...v})=>v));}
+  if(next.expenses)next.expenses=next.expenses.map(x=>x.day>=dayCount?{...x,day:dayCount-1}:x);
   return next;
 }
 function tripDateCount(start,end,fallback=4){
@@ -76,7 +92,9 @@ function readBackup(text,cities,{local=false}={}){
     if(t.unassigned!==undefined&&!Array.isArray(t.unassigned))fail();
     if(t.hotel!==null&&(!t.hotel||!str(t.hotel.name,80)||!str(t.hotel.address,200,true)))fail();
     if(t.deletedAt!==undefined&&(!str(t.deletedAt,40)||!Number.isFinite(Date.parse(t.deletedAt))))fail();
-    return {name:t.name,city:t.city,date:t.date,days,...(t.customPlaces!==undefined?{customPlaces:customPlaces.map(p=>({id:p.id,name:p.name,address:p.address,...(p.coord?{coord:[...p.coord]}:{})}))}:{}),hotel:t.hotel?{name:t.hotel.name,address:t.hotel.address}:null,unassigned:(t.unassigned||[]).map(v=>visit(v,true)),...(t.deletedAt?{deletedAt:t.deletedAt}:{})};
+    if(t.expenses!==undefined&&(!Array.isArray(t.expenses)||t.expenses.length>2000||t.expenses.some(x=>!validExpense(x,t.days.length))||new Set(t.expenses.map(x=>x.id)).size!==t.expenses.length))fail();
+    if(t.exchangeRate!==undefined&&(!t.exchangeRate||typeof t.exchangeRate!=='object'||Array.isArray(t.exchangeRate)||Object.entries(t.exchangeRate).some(([c,r])=>c==='KRW'||!Object.hasOwn(CURRENCIES,c)||typeof r!=='number'||!(r>0&&r<=100000))))fail();
+    return {name:t.name,city:t.city,date:t.date,days,...(t.customPlaces!==undefined?{customPlaces:customPlaces.map(p=>({id:p.id,name:p.name,address:p.address,...(p.coord?{coord:[...p.coord]}:{})}))}:{}),hotel:t.hotel?{name:t.hotel.name,address:t.hotel.address}:null,unassigned:(t.unassigned||[]).map(v=>visit(v,true)),...(t.deletedAt?{deletedAt:t.deletedAt}:{}),...(t.expenses!==undefined?{expenses:t.expenses.map(({id,day,amount,currency,category,note,createdAt})=>({id,day,amount,currency,category,...(note!==undefined?{note}:{}),...(createdAt?{createdAt}:{})}))}:{}),...(t.exchangeRate?{exchangeRate:{...t.exchangeRate}}:{})};
   });
 }
 const BACKUP_MAX_TRIPS=1000,BACKUP_MAX_VISITS=10000;
@@ -98,6 +116,6 @@ function createBackups(trips,cities){
   return parts.map(p=>createBackup(p,cities,createdAt));
 }
 function appendBackup(database,trips,id){
-  return {...database,trips:[...database.trips,...trips.map(t=>({...structuredClone(t),id:id(),days:t.days.map(d=>{const visits=d.visits.map(v=>({...v,uid:id()}));return {...d,visits,...(d.legs?{legs:Object.fromEntries(Object.entries(d.legs).map(([k,minutes])=>{const [,mode,i,j]=/^(\w+):(\d+)>(\d+)$/.exec(k);return [mode+':'+visits[i].uid+'>'+visits[j].uid,minutes];}))}:{})};}),unassigned:t.unassigned.map(v=>({...v,uid:id()}))}))]};
+  return {...database,trips:[...database.trips,...trips.map(t=>({...structuredClone(t),id:id(),days:t.days.map(d=>{const visits=d.visits.map(v=>({...v,uid:id()}));return {...d,visits,...(d.legs?{legs:Object.fromEntries(Object.entries(d.legs).map(([k,minutes])=>{const [,mode,i,j]=/^(\w+):(\d+)>(\d+)$/.exec(k);return [mode+':'+visits[i].uid+'>'+visits[j].uid,minutes];}))}:{})};}),unassigned:t.unassigned.map(v=>({...v,uid:id()})),...(t.expenses?{expenses:t.expenses.map(x=>({...x,id:id()}))}:{})}))]};
 }
-if(typeof module!=='undefined')module.exports={placeNameFromLink,mapsSearchUrl,legLabel,validCoord,legKey,pruneLegs,parseLocation,distanceKm,directionsUrl,validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,createBackups,appendBackup,BACKUP_MAX_BYTES};
+if(typeof module!=='undefined')module.exports={CURRENCIES,EXPENSE_CATEGORIES,cityCurrency,formatMoney,validExpense,expenseTotals,formatTotals,placeNameFromLink,mapsSearchUrl,legLabel,validCoord,legKey,pruneLegs,parseLocation,distanceKm,directionsUrl,validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,createBackups,appendBackup,BACKUP_MAX_BYTES};
