@@ -6,19 +6,32 @@ let storageRaw=null,storageLocked=false,saveFailed=false,rawSaved=false;
 const validId=id=>typeof id==='string'&&/^[A-Za-z0-9-]{1,100}$/.test(id);
 function storageMessage(message){saveFailed=true;$('#storageNotice').hidden=false;$('#storageMessage').textContent=message;$('#saveStatus').textContent='저장되지 않음';$('#recoverStorage').hidden=!storageLocked||storageRaw===null;$('#resetStorage').hidden=!(storageLocked&&rawSaved);}
 const STORAGE_UNAVAILABLE='이 화면에서는 브라우저 저장소를 쓸 수 없어 여행을 저장할 수 없어요. Chrome 같은 일반 브라우저로 파일을 열거나 로컬 서버 주소(http://127.0.0.1:4173)로 열어 주세요.';
-let storageUnavailable=false;
-try{storageRaw=localStorage.getItem(KEY);}catch{storageUnavailable=true;storageLocked=true;}
-if(storageUnavailable)storageMessage(STORAGE_UNAVAILABLE);
+const STORAGE_MEMORY='이 화면에서는 브라우저가 저장을 막아요. 파일에 담긴 일정을 보여 드리며, 고친 내용은 이 화면을 닫으면 사라집니다.';
+let storageUnavailable=false,memoryMode=false,seed=null,seedConfirm=false;
+function checkSaved(saved){
+  if(!saved||!Array.isArray(saved.trips))throw Error('invalid');
+  readBackup(JSON.stringify({format:'orbit-travel-backup',version:2,trips:saved.trips}),destinations,{local:true});
+  const ids=new Set();
+  for(const t of saved.trips){if(!validId(t.id)||ids.has(t.id))throw Error('invalid');ids.add(t.id);const uids=new Set();for(const v of [...t.days.flatMap(d=>d.visits),...(t.unassigned||[])]){if(!validId(v.uid)||uids.has(v.uid))throw Error('invalid');uids.add(v.uid);}}
+  return saved;
+}
+const seedDb=()=>({...structuredClone(seed.db),three:seed.db.three===true,seedStamp:seed.stamp});
+try{const el=document.getElementById?.('orbitSeed');if(el){const s=JSON.parse(el.textContent);if(s?.format!=='orbit-phone-seed'||typeof s.stamp!=='string')throw Error('seed');checkSaved(s.db);seed=s;}}catch{seed=null;}
+try{storageRaw=localStorage.getItem(KEY);}catch{storageUnavailable=true;}
+if(storageUnavailable){if(seed){memoryMode=true;db=seedDb();}else storageLocked=true;storageMessage(memoryMode?STORAGE_MEMORY:STORAGE_UNAVAILABLE);}
 else try{
-  if(storageRaw!==null){
-    const saved=JSON.parse(storageRaw);
-    if(!saved||!Array.isArray(saved.trips))throw Error('invalid');
-    readBackup(JSON.stringify({format:'orbit-travel-backup',version:1,trips:saved.trips}),destinations,{local:true});
-    const ids=new Set();
-    for(const t of saved.trips){if(!validId(t.id)||ids.has(t.id))throw Error('invalid');ids.add(t.id);const uids=new Set();for(const v of [...t.days.flatMap(d=>d.visits),...(t.unassigned||[])]){if(!validId(v.uid)||uids.has(v.uid))throw Error('invalid');uids.add(v.uid);}}
-    db=saved;db.three=saved.three===true;
-  }
+  if(storageRaw!==null){const saved=checkSaved(JSON.parse(storageRaw));db=saved;db.three=saved.three===true;}
 }catch{storageLocked=true;storageMessage('저장 자료를 읽을 수 없어 덮어쓰기를 막았습니다. 원본 자료를 내려받아 보관해 주세요. 원본 복구 파일은 일반 여행 백업과 다릅니다.');}
+if(seed&&!storageUnavailable&&!storageLocked){
+  if(storageRaw===null){db=seedDb();persist();}
+  else if(db.seedStamp!==seed.stamp){$('#seedNotice').hidden=false;$('#seedMessage').textContent='파일에 담긴 일정('+seed.stamp.slice(0,16).replace('T',' ')+' UTC에 만듦)이 이 기기에 저장된 일정과 달라요. 파일의 일정으로 바꿀 수 있어요.';}
+}
+$('#seedApply').onclick=()=>{
+  if(!seed)return;
+  if(!seedConfirm){seedConfirm=true;$('#seedApply').textContent='정말 바꾸기 (이 기기에서 고친 일정은 사라져요)';return;}
+  const previous=db;db=seedDb();if(!persist()){db=previous;return;}
+  seedConfirm=false;$('#seedNotice').hidden=true;welcome();toast('파일에 담긴 일정으로 바꿨어요.');
+};
 $('#recoverStorage').onclick=()=>{if(storageRaw===null)return;const url=URL.createObjectURL(new Blob([storageRaw],{type:'application/json;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='ORBIT-저장원본-복구용.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);if(storageLocked){rawSaved=true;storageMessage('복구용 원본 파일을 내려받았어요. 파일이 보관된 것을 확인한 뒤 저장 자료를 비우고 새로 시작할 수 있어요. 일반 여행 백업 파일이 있다면 백업·복원으로 여행을 되살릴 수 있습니다.');}};
 $('#resetStorage').onclick=()=>{
   if(!storageLocked||!rawSaved||!confirm('이 브라우저의 ORBIT 저장 자료를 모두 지우고 새로 시작합니다. 되돌릴 수 없습니다. 복구용 원본 파일을 보관했나요?'))return;
@@ -31,6 +44,7 @@ let placeCacheTrip=null,placeCacheList=null,placeCache=new Map();
 function indexedPlace(id){if(placeCacheTrip!==trip||placeCacheList!==trip.customPlaces){placeCacheTrip=trip;placeCacheList=trip.customPlaces;placeCache=new Map(catalog().map(p=>[p.id,p]));for(const p of trip.customPlaces||[])placeCache.set(p.id,{...p,custom:true,area:p.address||'위치 메모 없음',coord:p.coord||null});}return placeCache.get(id);}
 function persist(){
   trip?.days.forEach(pruneLegs);
+  if(memoryMode){saveFailed=false;$('#saveStatus').textContent='이 화면에서만 수정됨';return true;}
   if(storageUnavailable){storageMessage(STORAGE_UNAVAILABLE);return false;}
   if(storageLocked){storageMessage('저장 자료 보호 중입니다. 원본 자료를 보관하고 문제를 해결한 뒤 다시 열어 주세요. 변경은 적용하지 않았습니다.');return false;}
   try{
@@ -48,7 +62,7 @@ function dayOptions(selected=dayIndex){return trip.days.map((d,i)=>`<option valu
 function welcome(){
   trip=null;$('#welcome').hidden=false;$('#workspace').hidden=true;$('#export').hidden=true;$('#saveStatus').textContent='';
   const active=db.trips.filter(t=>!t.deletedAt),deleted=db.trips.filter(t=>t.deletedAt);
-  $('#recent').innerHTML='<h3>작성 중인 여행</h3>'+(active.length?active.slice().reverse().map(t=>`<div class="recent-row"><button class="recent-trip" data-open="${esc(t.id)}"><span>${esc(t.name)}<br><small>${destinations[t.city].name} · ${t.days.length}일 · 이 기기에 저장됨</small></span><span>↗</span></button><button class="trip-delete" data-remove-trip="${esc(t.id)}" aria-label="${esc(t.name)} 여행 삭제">삭제</button></div>`).join(''):'<p class="hint">작성 중인 여행이 없어요. 새 여행을 만들어 보세요.</p>')+(deleted.length?`<details class="deleted-trips"><summary>삭제한 여행 ${deleted.length}개</summary><p class="hint">삭제한 여행은 이 브라우저에 보관됩니다. 복원하면 일정과 숙소 메모를 다시 볼 수 있어요.</p>${deleted.slice().reverse().map(t=>`<div class="recent-row"><span class="deleted-name">${esc(t.name)}<small>${destinations[t.city].name} · ${t.days.length}일</small></span><button data-restore-trip="${esc(t.id)}" aria-label="${esc(t.name)} 여행 복원">복원</button></div>`).join('')}</details>`:'');
+  $('#recent').innerHTML='<h3>작성 중인 여행</h3>'+(active.length?active.slice().reverse().map(t=>`<div class="recent-row"><button class="recent-trip" data-open="${esc(t.id)}"><span>${esc(t.name)}<br><small>${destinations[t.city].name} · ${t.days.length}일 · ${memoryMode?'이 화면에서만 보관':'이 기기에 저장됨'}</small></span><span>↗</span></button><button class="trip-delete" data-remove-trip="${esc(t.id)}" aria-label="${esc(t.name)} 여행 삭제">삭제</button></div>`).join(''):'<p class="hint">작성 중인 여행이 없어요. 새 여행을 만들어 보세요.</p>')+(deleted.length?`<details class="deleted-trips"><summary>삭제한 여행 ${deleted.length}개</summary><p class="hint">삭제한 여행은 이 브라우저에 보관됩니다. 복원하면 일정과 숙소 메모를 다시 볼 수 있어요.</p>${deleted.slice().reverse().map(t=>`<div class="recent-row"><span class="deleted-name">${esc(t.name)}<small>${destinations[t.city].name} · ${t.days.length}일</small></span><button data-restore-trip="${esc(t.id)}" aria-label="${esc(t.name)} 여행 복원">복원</button></div>`).join('')}</details>`:'');
 }
 let pendingTripDelete=null;
 function requestTripDelete(id){const target=db.trips.find(t=>t.id===id&&!t.deletedAt);if(!target)return;pendingTripDelete=id;$('#deleteTripName').textContent=target.name;$('#deleteTripError').textContent='';$('#deleteTrip').showModal();}
@@ -258,6 +272,16 @@ $('#backupOpen').onclick=()=>{
   backupReadId++;pendingBackup=null;$('#backupFile').value='';$('#backupPreview').hidden=true;$('#backupPreview').textContent='';$('#backupMessage').textContent='';$('#backupRestore').disabled=true;
   $('#backupCount').textContent=`작성 중 ${db.trips.filter(t=>!t.deletedAt).length}개 · 삭제 보관 ${db.trips.filter(t=>t.deletedAt).length}개`;
   $('#backupDownload').disabled=!db.trips.length;$('#backup').showModal();
+};
+$('#phoneExport').onclick=async()=>{
+  $('#backupMessage').textContent='휴대폰용 파일을 만들고 있어요…';
+  try{
+    const get=async f=>{const r=await fetch(f,{cache:'no-store'});if(!r.ok)throw Error(f);return r.text();},files=['destinations.js','core.js','day-view.js','app.js'];
+    const [index,style,...texts]=await Promise.all(['index.html','style.css',...files].map(get));
+    const html=phoneHtml({index,style,scripts:Object.fromEntries(files.map((f,i)=>[f,texts[i]]))},{trips:db.trips,active:null,three:db.three},new Date().toISOString());
+    const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'})),link=document.createElement('a');link.href=url;link.download='ORBIT-휴대폰-'+new Date().toISOString().slice(0,10)+'.html';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    $('#backupMessage').textContent='휴대폰용 HTML을 내려받았어요. 카카오톡 나에게 보내기나 드라이브로 휴대폰에 옮긴 뒤 Chrome으로 여세요. 일정을 고치면 다시 만들어 보내면 돼요.';
+  }catch{$('#backupMessage').textContent='휴대폰용 파일은 PC에서 로컬 서버 주소(http://127.0.0.1:4173)로 연 ORBIT에서 만들 수 있어요.';}
 };
 $('#backup').addEventListener('close',()=>{backupReadId++;pendingBackup=null;});
 $('#backupDownload').onclick=()=>{

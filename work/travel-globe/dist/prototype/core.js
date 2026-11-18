@@ -15,6 +15,12 @@ function parseLocation(text){
   if(!m)return null;const coord=[Number(m[2]),Number(m[1])];return validCoord(coord)?coord:null;
 }
 function distanceKm([lng1,lat1],[lng2,lat2]){const rad=Math.PI/180,a=Math.sin((lat2-lat1)*rad/2)**2+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin((lng2-lng1)*rad/2)**2;return 12742*Math.asin(Math.sqrt(a));}
+function phoneHtml({index,style,scripts},db,stamp){
+  const seed='<script id="orbitSeed" type="application/json">'+JSON.stringify({format:'orbit-phone-seed',version:1,stamp,db}).replace(/</g,'\\u003c')+'</script>';
+  let html=index.replace('<link rel="stylesheet" href="style.css">',()=>'<style>'+style+'</style>');
+  for(const f of ['destinations.js','core.js','day-view.js','app.js'])html=html.replace('<script src="'+f+'"></script>',()=>(f==='destinations.js'?seed:'')+'<script>'+scripts[f].replaceAll('</script','<\\/script')+'</script>');
+  return html;
+}
 function placeNameFromLink(text){const m=/\/maps\/place\/([^/@?#]+)/.exec(String(text||''));if(!m)return '';try{return decodeURIComponent(m[1].replace(/\+/g,' ')).trim().slice(0,80);}catch{return '';}}
 function mapsSearchUrl(query,cityName){return 'https://www.google.com/maps/search/?'+new URLSearchParams({api:'1',query:[String(query||'').trim(),cityName].filter(Boolean).join(' ')});}
 function directionsUrl(a,b,mode){const where=p=>p.coord?p.coord[1]+','+p.coord[0]:[p.name,p.address].filter(Boolean).join(' ');return 'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',origin:where(a),destination:where(b),travelmode:mode==='walk'?'walking':'transit'});}
@@ -118,4 +124,4 @@ function createBackups(trips,cities){
 function appendBackup(database,trips,id){
   return {...database,trips:[...database.trips,...trips.map(t=>({...structuredClone(t),id:id(),days:t.days.map(d=>{const visits=d.visits.map(v=>({...v,uid:id()}));return {...d,visits,...(d.legs?{legs:Object.fromEntries(Object.entries(d.legs).map(([k,minutes])=>{const [,mode,i,j]=/^(\w+):(\d+)>(\d+)$/.exec(k);return [mode+':'+visits[i].uid+'>'+visits[j].uid,minutes];}))}:{})};}),unassigned:t.unassigned.map(v=>({...v,uid:id()})),...(t.expenses?{expenses:t.expenses.map(x=>({...x,id:id()}))}:{})}))]};
 }
-if(typeof module!=='undefined')module.exports={CURRENCIES,EXPENSE_CATEGORIES,cityCurrency,formatMoney,validExpense,expenseTotals,formatTotals,placeNameFromLink,mapsSearchUrl,legLabel,validCoord,legKey,pruneLegs,parseLocation,distanceKm,directionsUrl,validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,createBackups,appendBackup,BACKUP_MAX_BYTES};
+if(typeof module!=='undefined')module.exports={phoneHtml,CURRENCIES,EXPENSE_CATEGORIES,cityCurrency,formatMoney,validExpense,expenseTotals,formatTotals,placeNameFromLink,mapsSearchUrl,legLabel,validCoord,legKey,pruneLegs,parseLocation,distanceKm,directionsUrl,validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,createBackups,appendBackup,BACKUP_MAX_BYTES};
