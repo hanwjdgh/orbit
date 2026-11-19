@@ -15,8 +15,11 @@ function parseLocation(text){
   if(!m)return null;const coord=[Number(m[2]),Number(m[1])];return validCoord(coord)?coord:null;
 }
 function distanceKm([lng1,lat1],[lng2,lat2]){const rad=Math.PI/180,a=Math.sin((lat2-lat1)*rad/2)**2+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin((lng2-lng1)*rad/2)**2;return 12742*Math.asin(Math.sqrt(a));}
+const seedScript=(db,stamp)=>'<script id="orbit'+'Seed" type="application/json">'+JSON.stringify({format:'orbit-phone-seed',version:1,stamp,db}).replace(/</g,'\\u003c')+'</script>';
+function snapshotHtml(pristine,db,stamp){const tag=seedScript(db,stamp),re=/<script id="orbitSeed" type="application\/json">[\s\S]*?<\/script>/;return re.test(pristine)?pristine.replace(re,()=>tag):pristine.replace('</head>',()=>tag+'</head>');}
+function snapshotFileName(name,d){const p=n=>String(n).padStart(2,'0');return (String(name||'').trim().replace(/[\\/:*?"<>|]/g,'_')||'ORBIT')+'-'+p(d.getMonth()+1)+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes())+'.html';}
 function phoneHtml({index,style,scripts},db,stamp){
-  const seed='<script id="orbitSeed" type="application/json">'+JSON.stringify({format:'orbit-phone-seed',version:1,stamp,db}).replace(/</g,'\\u003c')+'</script>';
+  const seed=seedScript(db,stamp);
   let html=index.replace('<link rel="stylesheet" href="style.css">',()=>'<style>'+style+'</style>');
   for(const f of ['destinations.js','core.js','day-view.js','app.js'])html=html.replace('<script src="'+f+'"></script>',()=>(f==='destinations.js'?seed:'')+'<script>'+scripts[f].replaceAll('</script','<\\/script')+'</script>');
   return html;
@@ -124,4 +127,4 @@ function createBackups(trips,cities){
 function appendBackup(database,trips,id){
   return {...database,trips:[...database.trips,...trips.map(t=>({...structuredClone(t),id:id(),days:t.days.map(d=>{const visits=d.visits.map(v=>({...v,uid:id()}));return {...d,visits,...(d.legs?{legs:Object.fromEntries(Object.entries(d.legs).map(([k,minutes])=>{const [,mode,i,j]=/^(\w+):(\d+)>(\d+)$/.exec(k);return [mode+':'+visits[i].uid+'>'+visits[j].uid,minutes];}))}:{})};}),unassigned:t.unassigned.map(v=>({...v,uid:id()})),...(t.expenses?{expenses:t.expenses.map(x=>({...x,id:id()}))}:{})}))]};
 }
-if(typeof module!=='undefined')module.exports={phoneHtml,CURRENCIES,EXPENSE_CATEGORIES,cityCurrency,formatMoney,validExpense,expenseTotals,formatTotals,placeNameFromLink,mapsSearchUrl,legLabel,validCoord,legKey,pruneLegs,parseLocation,distanceKm,directionsUrl,validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,createBackups,appendBackup,BACKUP_MAX_BYTES};
+if(typeof module!=='undefined')module.exports={snapshotHtml,snapshotFileName,phoneHtml,CURRENCIES,EXPENSE_CATEGORIES,cityCurrency,formatMoney,validExpense,expenseTotals,formatTotals,placeNameFromLink,mapsSearchUrl,legLabel,validCoord,legKey,pruneLegs,parseLocation,distanceKm,directionsUrl,validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,createBackups,appendBackup,BACKUP_MAX_BYTES};

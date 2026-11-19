@@ -1,3 +1,4 @@
+const pristineHtml=document.documentElement?'<!doctype html>\n'+document.documentElement.outerHTML:null;
 const $=s=>document.querySelector(s),KEY='orbit-interactive-prototype-v1';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let db={trips:[],active:null,three:false},trip=null,dayIndex=0,view='plan',query='',filter='전체',detailId=null,undoState=null,map=null,mapReady=false,mapCity=null;
@@ -5,9 +6,9 @@ const pins=new Map();let pinSignature='',toastTimer;
 let storageRaw=null,storageLocked=false,saveFailed=false,rawSaved=false;
 const validId=id=>typeof id==='string'&&/^[A-Za-z0-9-]{1,100}$/.test(id);
 function storageMessage(message){saveFailed=true;$('#storageNotice').hidden=false;$('#storageMessage').textContent=message;$('#saveStatus').textContent='저장되지 않음';$('#recoverStorage').hidden=!storageLocked||storageRaw===null;$('#resetStorage').hidden=!(storageLocked&&rawSaved);}
-const STORAGE_UNAVAILABLE='이 화면에서는 브라우저 저장소를 쓸 수 없어 여행을 저장할 수 없어요. Chrome 같은 일반 브라우저로 파일을 열거나 로컬 서버 주소(http://127.0.0.1:4173)로 열어 주세요.';
+const STORAGE_MEMORY_EMPTY='이 화면에서는 브라우저가 저장을 막아요. 만든 일정은 "지금 상태를 파일로 저장"으로 보관해 주세요. 그냥 닫으면 사라집니다.';
 const STORAGE_MEMORY='이 화면에서는 브라우저가 저장을 막아요. 파일에 담긴 일정을 보여 드리며, 고친 내용은 이 화면을 닫으면 사라집니다.';
-let storageUnavailable=false,memoryMode=false,seed=null,seedConfirm=false;
+let storageUnavailable=false,memoryMode=false,memoryDirty=false,seed=null,seedConfirm=false;
 function checkSaved(saved){
   if(!saved||!Array.isArray(saved.trips))throw Error('invalid');
   readBackup(JSON.stringify({format:'orbit-travel-backup',version:2,trips:saved.trips}),destinations,{local:true});
@@ -18,7 +19,7 @@ function checkSaved(saved){
 const seedDb=()=>({...structuredClone(seed.db),three:seed.db.three===true,seedStamp:seed.stamp});
 try{const el=document.getElementById?.('orbitSeed');if(el){const s=JSON.parse(el.textContent);if(s?.format!=='orbit-phone-seed'||typeof s.stamp!=='string')throw Error('seed');checkSaved(s.db);seed=s;}}catch{seed=null;}
 try{storageRaw=localStorage.getItem(KEY);}catch{storageUnavailable=true;}
-if(storageUnavailable){if(seed){memoryMode=true;db=seedDb();}else storageLocked=true;storageMessage(memoryMode?STORAGE_MEMORY:STORAGE_UNAVAILABLE);}
+if(storageUnavailable){memoryMode=true;if(seed)db=seedDb();storageMessage(seed?STORAGE_MEMORY:STORAGE_MEMORY_EMPTY);}
 else try{
   if(storageRaw!==null){const saved=checkSaved(JSON.parse(storageRaw));db=saved;db.three=saved.three===true;}
 }catch{storageLocked=true;storageMessage('저장 자료를 읽을 수 없어 덮어쓰기를 막았습니다. 원본 자료를 내려받아 보관해 주세요. 원본 복구 파일은 일반 여행 백업과 다릅니다.');}
@@ -44,8 +45,7 @@ let placeCacheTrip=null,placeCacheList=null,placeCache=new Map();
 function indexedPlace(id){if(placeCacheTrip!==trip||placeCacheList!==trip.customPlaces){placeCacheTrip=trip;placeCacheList=trip.customPlaces;placeCache=new Map(catalog().map(p=>[p.id,p]));for(const p of trip.customPlaces||[])placeCache.set(p.id,{...p,custom:true,area:p.address||'위치 메모 없음',coord:p.coord||null});}return placeCache.get(id);}
 function persist(){
   trip?.days.forEach(pruneLegs);
-  if(memoryMode){saveFailed=false;$('#saveStatus').textContent='이 화면에서만 수정됨';return true;}
-  if(storageUnavailable){storageMessage(STORAGE_UNAVAILABLE);return false;}
+  if(memoryMode){saveFailed=false;memoryDirty=true;$('#saveSnapshot').hidden=false;$('#saveStatus').textContent='이 화면에서만 수정됨';return true;}
   if(storageLocked){storageMessage('저장 자료 보호 중입니다. 원본 자료를 보관하고 문제를 해결한 뒤 다시 열어 주세요. 변경은 적용하지 않았습니다.');return false;}
   try{
     if(localStorage.getItem(KEY)!==storageRaw){storageMessage('다른 탭에서 저장 내용이 바뀌었습니다. 입력 중인 내용을 따로 보관한 뒤 새로고침해 주세요. 기존 저장 내용은 덮어쓰지 않았습니다.');return false;}
@@ -217,6 +217,7 @@ $('#dimension').onclick=()=>{db.three=!db.three;if(!persist()){db.three=!db.thre
 function updateMap(){if(!trip)return;const missing=day().visits.filter(v=>!place(v.place)?.coord).length;$('#mapMissing').textContent=missing?'위치 미등록 '+missing+'곳 · 지도 표시와 연결선에서 제외됩니다.':'';$('#mapMissing').hidden=!missing;if(!mapReady)return;if(mapCity!==trip.city){mapCity=trip.city;pins.forEach(m=>m.remove());pins.clear();pinSignature='';map.jumpTo({center:city().center,zoom:city().zoom,pitch:db.three?50:0});}const shown=[...catalog(),...(trip.customPlaces||[]).map(c=>place(c.id)).filter(p=>p.coord)];const signature=trip.id+':'+day().visits.map(v=>v.place).join(',')+':'+shown.filter(p=>p.custom).map(p=>p.id+'@'+p.coord).join(',');if(signature===pinSignature)return;pinSignature=signature;const ids=new Set(shown.map(p=>p.id));pins.forEach((m,id)=>{if(!ids.has(id)){m.remove();pins.delete(id);}});shown.forEach(p=>{let marker=pins.get(p.id);if(!marker){const el=document.createElement('button');el.className='pin';el.onclick=()=>detail(p.id);marker=new maplibregl.Marker({element:el}).setLngLat(p.coord).addTo(map);pins.set(p.id,marker)}marker.setLngLat(p.coord);marker.getElement().setAttribute('aria-label',p.name+' 지도 상세');marker.getElement().classList.toggle('custom-pin',!!p.custom);const nums=day().visits.map((v,i)=>v.place===p.id?i+1:null).filter(Boolean),el=marker.getElement();el.textContent=(nums.length?nums.join('·')+' ':'')+p.name;el.classList.toggle('chosen',nums.length>0)});map.getSource('route').setData({type:'FeatureCollection',features:routeFeatures(day().visits,place)});}
 $('#fit').onclick=()=>{if(!mapReady)return;const coords=day().visits.map(v=>place(v.place).coord).filter(Boolean);if(!coords.length){map.flyTo({center:city().center,zoom:city().zoom,pitch:db.three?50:0,duration:motion()});return}const bounds=new maplibregl.LngLatBounds(coords[0],coords[0]);coords.forEach(c=>bounds.extend(c));map.fitBounds(bounds,{padding:{top:90,bottom:140,left:60,right:60},maxZoom:16,duration:motion()})};
 welcome();
+{const live=db.trips.filter(t=>!t.deletedAt&&travelDayInfo(t).index!==null);if(live.length===1){openTrip(live[0].id);dayIndex=travelDayInfo(live[0]).index;view='today';render();}}
 
 
 
@@ -273,15 +274,26 @@ $('#backupOpen').onclick=()=>{
   $('#backupCount').textContent=`작성 중 ${db.trips.filter(t=>!t.deletedAt).length}개 · 삭제 보관 ${db.trips.filter(t=>t.deletedAt).length}개`;
   $('#backupDownload').disabled=!db.trips.length;$('#backup').showModal();
 };
+async function buildSnapshot(){
+  const data={trips:db.trips,active:null,three:db.three},stamp=new Date().toISOString();
+  if(pristineHtml&&!/<script src="app\.js"/.test(pristineHtml))return snapshotHtml(pristineHtml,data,stamp);
+  const get=async f=>{const r=await fetch(f,{cache:'no-store'});if(!r.ok)throw Error(f);return r.text();},files=['destinations.js','core.js','day-view.js','app.js'];
+  const [index,style,...texts]=await Promise.all(['index.html','style.css',...files].map(get));
+  return phoneHtml({index,style,scripts:Object.fromEntries(files.map((f,i)=>[f,texts[i]]))},data,stamp);
+}
+async function saveSnapshot(){
+  const html=await buildSnapshot(),name=snapshotFileName((trip||db.trips.find(t=>!t.deletedAt))?.name,new Date());
+  const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'})),link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  memoryDirty=false;$('#saveSnapshot').hidden=true;toast('지금 상태를 파일로 저장했어요: '+name);return name;
+}
+$('#saveSnapshot').onclick=()=>saveSnapshot().catch(()=>toast('파일로 저장하지 못했어요. 다시 시도해 주세요.'));
+window.addEventListener?.('beforeunload',e=>{if(memoryMode&&memoryDirty){e.preventDefault();e.returnValue='';}});
 $('#phoneExport').onclick=async()=>{
   $('#backupMessage').textContent='휴대폰용 파일을 만들고 있어요…';
   try{
-    const get=async f=>{const r=await fetch(f,{cache:'no-store'});if(!r.ok)throw Error(f);return r.text();},files=['destinations.js','core.js','day-view.js','app.js'];
-    const [index,style,...texts]=await Promise.all(['index.html','style.css',...files].map(get));
-    const html=phoneHtml({index,style,scripts:Object.fromEntries(files.map((f,i)=>[f,texts[i]]))},{trips:db.trips,active:null,three:db.three},new Date().toISOString());
-    const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'})),link=document.createElement('a');link.href=url;link.download='ORBIT-휴대폰-'+new Date().toISOString().slice(0,10)+'.html';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    await saveSnapshot();
     $('#backupMessage').textContent='휴대폰용 HTML을 내려받았어요. 카카오톡 나에게 보내기나 드라이브로 휴대폰에 옮긴 뒤 Chrome으로 여세요. 일정을 고치면 다시 만들어 보내면 돼요.';
-  }catch{$('#backupMessage').textContent='휴대폰용 파일은 PC에서 로컬 서버 주소(http://127.0.0.1:4173)로 연 ORBIT에서 만들 수 있어요.';}
+  }catch{$('#backupMessage').textContent='휴대폰용 파일을 만들지 못했어요. ORBIT HTML 파일이나 로컬 서버 주소로 연 화면에서 다시 시도해 주세요.';}
 };
 $('#backup').addEventListener('close',()=>{backupReadId++;pendingBackup=null;});
 $('#backupDownload').onclick=()=>{

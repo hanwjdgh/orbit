@@ -8,7 +8,7 @@ function boot(saved,fail=false){
  const els={},listeners={};let stored=saved,download;
  const element=k=>els[k]||(els[k]={value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,classList:{add(){},remove(){},toggle(){}},querySelectorAll:()=>[],addEventListener(){},showModal(){this.open=true;},close(){this.open=false;},reset(){},click(){},remove(){}});
  const ctx={...core,destinations:cities,structuredClone,console,crypto:require('node:crypto').webcrypto,TextEncoder,Blob,setTimeout:()=>1,clearTimeout(){},URL:{createObjectURL(blob){download=blob;return 'blob:test';},revokeObjectURL(){}},window:{},document:{querySelector:element,addEventListener:(name,fn)=>listeners[name]=fn,createElement:()=>element('a'),body:{append(){}}},localStorage:{getItem:()=>stored,setItem:(k,v)=>{if(fail)throw Error('full');stored=v;}},matchMedia:()=>({matches:true})};
- element('#customAddress');vm.createContext(ctx);vm.runInContext(app,ctx);
+ element('#customAddress');vm.createContext(ctx);vm.runInContext(fs.readFileSync('work/travel-globe/dist/prototype/day-view.js','utf8'),ctx);vm.runInContext(app,ctx);
  return {ctx,els,run:s=>vm.runInContext(s,ctx),stored:()=>stored,download:()=>download,click(dataset,attrs=[]){listeners.click({target:{closest:()=>({dataset,hasAttribute:k=>attrs.includes(k)})}});}};
 }
 const b=boot(JSON.stringify({trips:[initial],active:'existing'}));b.run("openTrip('existing');openCustom()");
