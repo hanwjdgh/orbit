@@ -41,6 +41,13 @@ function boot(raw,now){
  vm.createContext(ctx);vm.runInContext(fs.readFileSync('work/travel-globe/dist/prototype/day-view.js','utf8'),ctx);vm.runInContext(app,ctx);
  return {$,run:s=>vm.runInContext(s,ctx),trip:()=>JSON.parse(stored).trips[0],setFail:v=>fail=v,blob:()=>blob,click(dataset){listeners.click({target:{closest:()=>({dataset,hasAttribute:()=>false})}});}};
 }
+// Quick trip length: one tap sets start (today if empty) and end; moving start keeps the length.
+{const q=boot(JSON.stringify({trips:[]}),'2026-11-19T03:00:00Z');
+ q.click({nights:'3',for:'trip'});assert.equal(q.$('#tripDate').value,'2026-11-19');assert.equal(q.$('#tripEndDate').value,'2026-11-22');assert.equal(q.$('#tripDateSummary').textContent,'3박 4일');
+ q.$('#tripDate').value='2026-11-20';q.$('#tripDate').oninput();assert.equal(q.$('#tripEndDate').value,'2026-11-23','end follows start');
+ q.click({nights:'1',for:'trip'});assert.equal(q.$('#tripEndDate').value,'2026-11-21');assert.equal(q.$('#tripDateSummary').textContent,'1박 2일');
+ q.click({nights:'0',for:'trip'});assert.equal(q.$('#tripEndDate').value,'2026-11-20');assert.equal(q.$('#tripDateSummary').textContent,'당일 여행');
+ const n=boot(JSON.stringify({trips:[]}),'2026-11-19T03:00:00Z');n.$('#tripDate').value='2026-12-01';n.$('#tripDate').oninput();assert.equal(n.$('#tripEndDate').value,'2026-12-04','empty end defaults to 3 nights');}
 const fresh=structuredClone(trip);delete fresh.expenses;delete fresh.exchangeRate;
 const ui=boot(JSON.stringify({trips:[fresh]}),'2026-11-21T03:00:00Z');ui.run("openTrip('t1')");ui.click({panel:'expenses'});
 let html=ui.$('#panelContent').innerHTML;assert.match(html,/id="expenseForm"/);assert.match(html,/<option value="JPY" selected>/);assert.match(html,/<option value="1" selected>Day 2/,'defaults to local today (11.21 = Day 2)');assert.match(html,/아직 기록한 경비가 없어요/);
