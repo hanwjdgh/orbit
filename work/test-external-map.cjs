@@ -95,6 +95,14 @@ let after=ui.stored().trips[0],added=after.customPlaces.at(-1);assert.equal(afte
 ui.run("view='search';render()");ui.$('#quickLink').value=link;ui.$('#quickDay').value='0';ui.$('#quickForm').onsubmit({preventDefault(){}});
 const again=ui.stored().trips[0];assert.equal(again.customPlaces.length,after.customPlaces.length,'same link reuses the place');assert.equal(again.days[0].visits.at(-1).place,added.id);
 ui.run("view='search';render()");ui.$('#quickLink').value='33.6, 130.41';ui.$('#quickDay').value='0';ui.$('#quickForm').onsubmit({preventDefault(){}});assert.equal(ui.$('#custom').open,true,'no name in link opens the full form');assert.equal(ui.$('#customLocation').value,'33.6, 130.41');assert.match(ui.$('#customError').textContent,/이름/);ui.$('#custom').close();
+// Share text from the Google Maps app: name + address + short link (no coordinates).
+assert.deepEqual(core.parseShareText('칸카케이 케이블카\n일본 〒761-4431 가가와현 쇼즈군\n쇼도시마초 1\nhttps://maps.app.goo.gl/AbCd123'),{name:'칸카케이 케이블카',address:'일본 〒761-4431 가가와현 쇼즈군 쇼도시마초 1',link:'https://maps.app.goo.gl/AbCd123',coord:null});
+assert.equal(core.parseShareText('우동 가게 https://maps.app.goo.gl/x').name,'우동 가게');
+assert.deepEqual(core.parseShareText('작은 식당\n34.34, 134.04').coord,[134.04,34.34]);
+assert.equal(core.parseShareText('하카타역'),null,'plain text without link or coordinates is not a place');assert.equal(core.parseShareText('https://maps.app.goo.gl/x'),null,'link alone has no name');
+ui.run("view='search';render()");ui.$('#quickLink').value='칸카케이 케이블카\r\n일본 〒761-4431 가가와현 쇼즈군 쇼도시마초\r\nhttps://maps.app.goo.gl/AbCd123';ui.$('#quickDay').value='0';ui.$('#quickForm').onsubmit({preventDefault(){}});
+let shared=ui.stored().trips[0].customPlaces.at(-1);assert.equal(shared.name,'칸카케이 케이블카');assert.equal(shared.address,'일본 〒761-4431 가가와현 쇼즈군 쇼도시마초');assert.equal(shared.coord,undefined);assert.equal(ui.stored().trips[0].days[0].visits.at(-1).place,shared.id);
+const placesBefore=ui.stored().trips[0].customPlaces.length;ui.run("view='search';render()");ui.$('#quickLink').value='칸카케이 케이블카\n일본 〒761-4431 가가와현 쇼즈군 쇼도시마초\nhttps://maps.app.goo.gl/AbCd123';ui.$('#quickForm').onsubmit({preventDefault(){}});assert.equal(ui.stored().trips[0].customPlaces.length,placesBefore,'same shared place is reused');
 // Search panel links the current query to Google Maps, scoped to the trip city.
 assert.equal(new URL(core.mapsSearchUrl(' 우동 바카이치다이 ','TAKAMATSU')).searchParams.get('query'),'우동 바카이치다이 TAKAMATSU');assert.equal(new URL(core.mapsSearchUrl('','TAKAMATSU')).searchParams.get('query'),'TAKAMATSU');
 ui.run("view='search';query='우동';render()");assert.match(ui.$('#panelContent').innerHTML,/id="googleSearch" href="https:\/\/www.google.com\/maps\/search\/\?api=1&amp;query=%EC%9A%B0%EB%8F%99\+FUKUOKA" target="_blank" rel="noopener noreferrer"/);

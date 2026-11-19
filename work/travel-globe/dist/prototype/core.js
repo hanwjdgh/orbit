@@ -24,6 +24,17 @@ function phoneHtml({index,style,scripts},db,stamp){
   for(const f of ['destinations.js','core.js','day-view.js','app.js'])html=html.replace('<script src="'+f+'"></script>',()=>(f==='destinations.js'?seed:'')+'<script>'+scripts[f].replaceAll('</script','<\\/script')+'</script>');
   return html;
 }
+function parseShareText(text){
+  const lines=String(text||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean),rest=[];let link='',coord=null;
+  for(const line of lines){
+    const url=/https?:\/\/\S+/.exec(line);
+    if(url){link||=url[0];const before=line.slice(0,url.index).trim();if(before)rest.push(before);continue;}
+    const c=parseLocation(line);if(c&&!coord){coord=c;continue;}
+    rest.push(line);
+  }
+  if(!rest.length||(!link&&!coord))return null;
+  return {name:rest[0].slice(0,80),address:rest.slice(1).join(' ').slice(0,300),link,coord};
+}
 function placeNameFromLink(text){const m=/\/maps\/place\/([^/@?#]+)/.exec(String(text||''));if(!m)return '';try{return decodeURIComponent(m[1].replace(/\+/g,' ')).trim().slice(0,80);}catch{return '';}}
 function mapsSearchUrl(query,cityName){return 'https://www.google.com/maps/search/?'+new URLSearchParams({api:'1',query:[String(query||'').trim(),cityName].filter(Boolean).join(' ')});}
 function directionsUrl(a,b,mode){const where=p=>p.coord?p.coord[1]+','+p.coord[0]:[p.name,p.address].filter(Boolean).join(' ');return 'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',origin:where(a),destination:where(b),travelmode:mode==='walk'?'walking':'transit'});}
@@ -127,4 +138,4 @@ function createBackups(trips,cities){
 function appendBackup(database,trips,id){
   return {...database,trips:[...database.trips,...trips.map(t=>({...structuredClone(t),id:id(),days:t.days.map(d=>{const visits=d.visits.map(v=>({...v,uid:id()}));return {...d,visits,...(d.legs?{legs:Object.fromEntries(Object.entries(d.legs).map(([k,minutes])=>{const [,mode,i,j]=/^(\w+):(\d+)>(\d+)$/.exec(k);return [mode+':'+visits[i].uid+'>'+visits[j].uid,minutes];}))}:{})};}),unassigned:t.unassigned.map(v=>({...v,uid:id()})),...(t.expenses?{expenses:t.expenses.map(x=>({...x,id:id()}))}:{})}))]};
 }
-if(typeof module!=='undefined')module.exports={snapshotHtml,snapshotFileName,phoneHtml,CURRENCIES,EXPENSE_CATEGORIES,cityCurrency,formatMoney,validExpense,expenseTotals,formatTotals,placeNameFromLink,mapsSearchUrl,legLabel,validCoord,legKey,pruneLegs,parseLocation,distanceKm,directionsUrl,validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,createBackups,appendBackup,BACKUP_MAX_BYTES};
+if(typeof module!=='undefined')module.exports={parseShareText,snapshotHtml,snapshotFileName,phoneHtml,CURRENCIES,EXPENSE_CATEGORIES,cityCurrency,formatMoney,validExpense,expenseTotals,formatTotals,placeNameFromLink,mapsSearchUrl,legLabel,validCoord,legKey,pruneLegs,parseLocation,distanceKm,directionsUrl,validCustomPlace,resolvePlace,routeFeatures,clockText,minutes,buildTimeline,updateTripSettings,tripDateCount,tripEndDate,readBackup,createBackup,createBackups,appendBackup,BACKUP_MAX_BYTES};
